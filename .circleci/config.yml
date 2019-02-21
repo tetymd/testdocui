@@ -1,0 +1,157 @@
+version: 2.1
+
+executors:
+  build:
+    parameters:
+      go-version:
+        type: string
+    docker:
+      - image: circleci/golang:<< parameters.go-version >>
+        environment:
+          GO111MODULE: "on"
+    working_directory: /go/src/github.com/skanehira/docui
+
+  docker:
+    parameters:
+      docker-version:
+        type: string
+    docker:
+      - image: docker:<< parameters.docker-version >>
+    working_directory: /go/src/github.com/skanehira/docui
+
+commands:
+  go_mod_download:
+    steps:
+      - restore_cache:
+          name: Restore go modules cache
+          keys:
+            - go-modules-{{ checksum "go.sum" }}
+
+      - run: go mod download
+
+      - save_cache:
+          name: Save go modules cache
+          key: go-modules-{{ checksum "go.sum" }}
+          paths:
+            - "/go/pkg/mod"
+
+jobs:
+  build:
+    parameters:
+      go-version:
+        type: string
+
+    executor:
+      name: build
+      go-version: << parameters.go-version >>
+
+    steps:
+      - checkout
+
+      - go_mod_download
+
+      - run:
+          name: Run build
+          command: go build
+
+  lint:
+    parameters:
+      go-version:
+        type: string
+
+    executor:
+      name: build
+      go-version: << parameters.go-version >>
+
+    steps:
+      - checkout
+
+      - run:
+          name: Install golint
+          command: go get github.com/golang/lint/golint
+
+      - run:
+          name: Run golint
+          command: golint -set_exit_status=1 ./...
+
+  build-docker-image:
+    parameters:
+      docker-version:
+        type: string
+
+    executor:
+      name: docker
+      docker-version: << parameters.docker-version >>
+
+    steps:
+      - checkout
+
+      - setup_remote_docker:
+          version: << parameters.docker-version >>
+
+      - run:
+          name: Build Docker Image
+          command: docker build -t skanehira/docui .
+
+      - run:
+          name: Login Docker Hub
+          command: docker login -u ${DOCKER_USER} -p ${DOCKER_PASS}
+
+      - run:
+          name: Push Image
+          command: docker push skanehira/docui
+
+  release:
+    parameters:
+      go-version:
+        type: string
+
+    executor:
+      name: build
+      go-version: << parameters.go-version >>
+
+    steps:
+      - checkout
+      - go_mod_download
+      - run:
+          name: Run goreleaser
+          command: curl -sL https://git.io/goreleaser | bash -s -- --rm-dist
+
+workflows:
+  stable-build:
+    jobs:
+      - lint:
+          go-version: "1.11.4"
+      - build:
+          go-version: "1.11.4"
+          requires:
+            - lint
+
+  latest-build:
+    jobs:
+      - lint:
+          go-version: "1.11.5"
+      - build:
+          go-version: "1.11.5"
+          requires:
+            - lint
+
+  docker-image-build:
+    jobs:
+      - build-docker-image:
+          docker-version: "18.06.0-ce"
+          filters:
+            branches:
+              only: master
+
+  release:
+    jobs:
+      - lint:
+          go-version: "1.11.4"
+      - release:
+          go-version: "1.11.4"
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /[0-9]+(\.[0-9]+)(\.[0-9]+)/

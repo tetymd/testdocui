@@ -1,9 +1,8 @@
 # About docui
-docui is a simple GUI tool for docker running on terminal.  
-Supported OS is Linux / Mac only.  
+docui is a simple TUI Client for docker.  
+Supported OS is Linux/Mac only.  
 
-Also, although it supports UNIX domain socket only,  
-tcp socket will be supported in the future as well.  
+Also, although it supports UNIX domain socket, TCP, http/https.
 
 # Installation
 If you not install golang,  
@@ -12,17 +11,17 @@ you have to install go and set $GOPATH and $GOBIN to ~/.bashrc.
 ## 1. Install go
 
 ### Mac
-```
+```sh
 brew intall golang
 ```
 
 ### Linux
-```
+```sh
 yum install golang
 ```
 
 ### Add ~/.bashrc
-```
+```sh
 # add thises to ~/.bashrc
 export GOPATH=/to/your/path
 export GOBIN=$GOPATH/bin
@@ -30,7 +29,7 @@ export PATH=$PATH:$GOBIN
 ```
 
 ### Reload ~/.bashrc
-```
+```sh
 resource ~/.bashrc
 ```
 
@@ -42,12 +41,12 @@ https://www.docker.com/get-started
 
 ## 3. Install Git
 ### Mac
-```
+```sh
 brew install git
 ```
 
 ### Linux
-```
+```sh
 yum install git
 ```
 
@@ -58,13 +57,13 @@ Please use Go version 1.11.4 higher.
 
 Use go get or git clone:
 
-```
+```sh
 $ go get -d github.com/skanehira/docui
 $ cd $GOPATH/src/github.com/skanehira/docui
 $ GO111MODULE=on go install
 ```
 
-```
+```sh
 $ git clone https://github.com/skanehira/docui.git
 $ cd docui/
 $ GO111MODULE=on go install
@@ -89,17 +88,15 @@ $ GO111MODULE=on go install
 ## 5. Use on Docker
 If you want to use docui on docker.
 
-```
+```sh
 $ docker run --rm -itv /var/run/docker.sock:/var/run/docker.sock skanehira/docui
-$ docui
 ```
 
 ## 6. Build Docker Image
 If you want to customize image.
 
-```
-$ cd build
-$ bash build.sh
+```sh
+$ make docker-build
 ```
 
 # How to use
@@ -165,10 +162,10 @@ It must be absolute path.
 Selected image id.
 
 - Attach  
-If you want to attach contaienr, please Enter.
+If you want to attach container, please Enter.
 
 - User  
-If you want to attach contaienr, please input user name.
+If you want to attach container, please input user name.
 
 - Env  
 The environment variable setting value can be defined by variables like `$PATH`.
@@ -223,3 +220,32 @@ If you want to specify multiple options, please enter as below.
 ```
 type=nfs o=addr=192.168.1.1,rw device=:/path/to/dir
 ```
+
+## Configuration
+
+### Command-Line Options
+
+Support custom endpoint:
+
+```sh
+$ docui -h
+Usage of docui:
+  -api string
+        api version (default "1.39")
+  -ca string
+        ca.pem file path
+  -cert string
+        cert.pem file path
+  -endpoint string
+        Docker endpoint (default "unix:///var/run/docker.sock")
+  -key string
+        key.pem file path
+```
+
+Or set environment variable:
+
+- `DOCKER_HOST`
+- `DOCKER_TLS_VERIFY`
+- `DOCKER_CERT_PATH`
+
+These environment variables take precedence over command-line options.

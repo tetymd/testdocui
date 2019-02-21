@@ -2,20 +2,22 @@ package panel
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
-	docker "github.com/fsouza/go-dockerclient"
+	"github.com/docker/docker/api/types"
 	"github.com/jroimartin/gocui"
 	"github.com/skanehira/docui/common"
 )
 
 const (
-	VolumeTypeBind   = "bind"
+	// VolumeTypeBind type of volume is bind
+	VolumeTypeBind = "bind"
+	// VolumeTypeVolume type of volume is volume
 	VolumeTypeVolume = "volume"
 )
 
+// ImageList image list panel.
 type ImageList struct {
 	*Gui
 	name string
@@ -24,8 +26,10 @@ type ImageList struct {
 	Data   map[string]interface{}
 	filter string
 	form   *Form
+	stop   chan int
 }
 
+// Image image info.
 type Image struct {
 	ID      string `tag:"ID" len:"min:0.1 max:0.2"`
 	Repo    string `tag:"REPOSITORY" len:"min:0.1 max:0.3"`
@@ -34,21 +38,25 @@ type Image struct {
 	Size    string `tag:"SIZE" len:"min:0.1 max:0.2"`
 }
 
+// NewImageList create new image list panel.
 func NewImageList(gui *Gui, name string, x, y, w, h int) *ImageList {
 	i := &ImageList{
 		Gui:      gui,
 		name:     name,
 		Position: Position{x, y, w, h},
 		Data:     make(map[string]interface{}),
+		stop:     make(chan int, 1),
 	}
 
 	return i
 }
 
+// Name return panel name.
 func (i *ImageList) Name() string {
 	return i.name
 }
 
+// Edit filtering image list.
 func (i *ImageList) Edit(v *gocui.View, key gocui.Key, ch rune, mod gocui.Modifier) {
 	switch {
 	case ch != 0 && mod == 0:
@@ -72,11 +80,12 @@ func (i *ImageList) Edit(v *gocui.View, key gocui.Key, ch rune, mod gocui.Modifi
 	}
 }
 
+// SetView set up image list panel.
 func (i *ImageList) SetView(g *gocui.Gui) error {
 	// set header panel
-	if v, err := g.SetView(ImageListHeaderPanel, i.x, i.y, i.w, i.h); err != nil {
+	if v, err := common.SetViewWithValidPanelSize(g, ImageListHeaderPanel, i.x, i.y, i.w, i.h); err != nil {
 		if err != gocui.ErrUnknownView {
-			i.Logger.Error(err)
+			common.Logger.Error(err)
 			return err
 		}
 
@@ -84,14 +93,14 @@ func (i *ImageList) SetView(g *gocui.Gui) error {
 		v.Frame = true
 		v.Title = v.Name()
 		v.FgColor = gocui.AttrBold | gocui.ColorWhite
-		common.OutputFormatedHeader(v, &Image{})
+		common.OutputFormattedHeader(v, &Image{})
 	}
 
 	// set scroll panel
-	v, err := g.SetView(i.name, i.x, i.y+1, i.w, i.h)
+	v, err := common.SetViewWithValidPanelSize(g, i.name, i.x, i.y+1, i.w, i.h)
 	if err != nil {
 		if err != gocui.ErrUnknownView {
-			i.Logger.Error(err)
+			common.Logger.Error(err)
 			return err
 		}
 		v.Frame = false
@@ -107,24 +116,44 @@ func (i *ImageList) SetView(g *gocui.Gui) error {
 
 	i.SetKeyBinding()
 
-	//  monitoring container status interval 5s
-	go func() {
-		for {
-			i.Update(func(g *gocui.Gui) error {
-				return i.Refresh(g, v)
-			})
-			time.Sleep(5 * time.Second)
-		}
-	}()
-
+	// monitoring image status.
+	go i.Monitoring(i.stop, i.Gui.Gui, v)
 	return nil
 }
 
+// Monitoring monitoring image list.
+func (i *ImageList) Monitoring(stop chan int, g *gocui.Gui, v *gocui.View) {
+	common.Logger.Info("monitoring image list start")
+	ticker := time.NewTicker(5 * time.Second)
+
+LOOP:
+	for {
+		select {
+		case <-ticker.C:
+			i.Update(func(g *gocui.Gui) error {
+				return i.Refresh(g, v)
+			})
+		case <-stop:
+			ticker.Stop()
+			break LOOP
+		}
+	}
+	common.Logger.Info("monitoring image list stop")
+}
+
+// CloseView close panel
+func (i *ImageList) CloseView() {
+	// stop monitoring
+	i.stop <- 0
+	close(i.stop)
+}
+
+// Refresh update image info
 func (i *ImageList) Refresh(g *gocui.Gui, v *gocui.View) error {
 	i.Update(func(g *gocui.Gui) error {
 		v, err := i.View(i.name)
 		if err != nil {
-			i.Logger.Error(err)
+			common.Logger.Error(err)
 			return nil
 		}
 		i.GetImageList(v)
@@ -134,6 +163,7 @@ func (i *ImageList) Refresh(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// SetKeyBinding set key bind to this panel.
 func (i *ImageList) SetKeyBinding() {
 	i.SetKeyBindingToPanel(i.name)
 
@@ -175,6 +205,7 @@ func (i *ImageList) SetKeyBinding() {
 	}
 }
 
+// selected return selected image
 func (i *ImageList) selected() (*Image, error) {
 	v, _ := i.View(i.name)
 	_, cy := v.Cursor()
@@ -190,12 +221,13 @@ func (i *ImageList) selected() (*Image, error) {
 	return i.Images[index], nil
 }
 
+// CreateContainerPanel display create container form.
 func (i *ImageList) CreateContainerPanel(g *gocui.Gui, v *gocui.View) error {
 	// get image name
 	name, err := i.GetImageName()
 	if err != nil {
 		i.ErrMessage(err.Error(), i.name)
-		i.Logger.Error(err)
+		common.Logger.Error(err)
 		return nil
 	}
 
@@ -279,6 +311,7 @@ func (i *ImageList) CreateContainerPanel(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// CreateContainer create the container.
 func (i *ImageList) CreateContainer(g *gocui.Gui, v *gocui.View) error {
 	if !i.form.Validate() {
 		return nil
@@ -292,18 +325,18 @@ func (i *ImageList) CreateContainer(g *gocui.Gui, v *gocui.View) error {
 	if err != nil {
 		i.form.Close(g, v)
 		i.ErrMessage(err.Error(), i.name)
-		i.Logger.Error(err)
+		common.Logger.Error(err)
 		return nil
 	}
 
 	i.form.Close(g, v)
 
 	i.AddTask(fmt.Sprintf("Create container %s", data["Name"]), func() error {
-		i.Logger.Info("create image start")
-		defer i.Logger.Info("create image finished")
+		common.Logger.Info("create image start")
+		defer common.Logger.Info("create image end")
 
-		if err := i.Docker.CreateContainerWithOptions(options); err != nil {
-			i.Logger.Error(err)
+		if err := i.Docker.CreateContainer(options); err != nil {
+			common.Logger.Error(err)
 			return err
 		}
 
@@ -313,6 +346,7 @@ func (i *ImageList) CreateContainer(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// PullImagePanel display pull image form.
 func (i *ImageList) PullImagePanel(g *gocui.Gui, v *gocui.View) error {
 	maxX, maxY := i.Size()
 	x := maxX / 8
@@ -343,34 +377,21 @@ func (i *ImageList) PullImagePanel(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// PullImage pull the specified image.
 func (i *ImageList) PullImage(g *gocui.Gui, v *gocui.View) error {
-
 	if !i.form.Validate() {
 		return nil
-	}
-	item := strings.SplitN(i.form.GetFieldTexts()["Image"], ":", 2)
-
-	name := item[0]
-	var tag string
-
-	if len(item) == 1 {
-		tag = "latest"
-	} else {
-		tag = item[1]
 	}
 
 	i.form.Close(g, v)
 
-	i.AddTask(fmt.Sprintf("Pull image %s:%s", name, tag), func() error {
-		i.Logger.Info("pull image start")
-		defer i.Logger.Info("pull image finished")
-		options := docker.PullImageOptions{
-			Repository: name,
-			Tag:        tag,
-		}
+	image := i.form.GetFieldTexts()["Image"]
+	i.AddTask(fmt.Sprintf("Pull image %s", image), func() error {
+		common.Logger.Info("pull image start")
+		defer common.Logger.Info("pull image end")
 
-		if err := i.Docker.PullImageWithOptions(options); err != nil {
-			i.Logger.Error(err)
+		if err := i.Docker.PullImage(image); err != nil {
+			common.Logger.Error(err)
 			return err
 		}
 
@@ -380,21 +401,22 @@ func (i *ImageList) PullImage(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// DetailImage display the image detail info
 func (i *ImageList) DetailImage(g *gocui.Gui, v *gocui.View) error {
-	i.Logger.Info("inspect image start")
-	defer i.Logger.Info("inspect image finished")
+	common.Logger.Info("inspect image start")
+	defer common.Logger.Info("inspect image end")
 
 	image, err := i.selected()
 	if err != nil {
 		i.ErrMessage(err.Error(), i.name)
-		i.Logger.Error(err)
+		common.Logger.Error(err)
 		return nil
 	}
 
 	img, err := i.Docker.InspectImage(image.ID)
 	if err != nil {
 		i.ErrMessage(err.Error(), i.name)
-		i.Logger.Error(err)
+		common.Logger.Error(err)
 		return nil
 	}
 
@@ -402,7 +424,7 @@ func (i *ImageList) DetailImage(g *gocui.Gui, v *gocui.View) error {
 
 	v, err = g.View(DetailPanel)
 	if err != nil {
-		i.Logger.Error(err)
+		common.Logger.Error(err)
 		return nil
 	}
 
@@ -414,11 +436,12 @@ func (i *ImageList) DetailImage(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// SaveImagePanel display save image form.
 func (i *ImageList) SaveImagePanel(g *gocui.Gui, v *gocui.View) error {
 	name, err := i.GetImageName()
 	if err != nil {
 		i.ErrMessage(err.Error(), i.name)
-		i.Logger.Error(err)
+		common.Logger.Error(err)
 		return nil
 	}
 
@@ -455,6 +478,7 @@ func (i *ImageList) SaveImagePanel(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// SaveImage save then specified image.
 func (i *ImageList) SaveImage(g *gocui.Gui, v *gocui.View) error {
 
 	if !i.form.Validate() {
@@ -465,27 +489,16 @@ func (i *ImageList) SaveImage(g *gocui.Gui, v *gocui.View) error {
 	i.form.Close(g, v)
 
 	i.AddTask(fmt.Sprintf("Save image:%s to %s", data["Image"], data["Path"]), func() error {
-		i.Logger.Info("save image start")
-		defer i.Logger.Info("save image finished")
+		common.Logger.Info("save image start")
+		defer common.Logger.Info("save image end")
 
-		file, err := os.OpenFile(data["Path"], os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
-		if err != nil {
-			i.Logger.Error(err)
-			return err
-		}
-		defer file.Close()
-
-		options := docker.ExportImageOptions{
-			Name:         data["Image"],
-			OutputStream: file,
-		}
-
-		return i.Docker.SaveImageWithOptions(options)
+		return i.Docker.SaveImage([]string{data["Image"]}, data["Path"])
 	})
 
 	return nil
 }
 
+// ImportImagePanel display import form.
 func (i *ImageList) ImportImagePanel(g *gocui.Gui, v *gocui.View) error {
 	maxX, maxY := i.Size()
 	x := maxX / 8
@@ -520,6 +533,7 @@ func (i *ImageList) ImportImagePanel(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// ImportImage import the specified file path.
 func (i *ImageList) ImportImage(g *gocui.Gui, v *gocui.View) error {
 
 	if !i.form.Validate() {
@@ -527,20 +541,15 @@ func (i *ImageList) ImportImage(g *gocui.Gui, v *gocui.View) error {
 	}
 
 	data := i.form.GetFieldTexts()
-	options := docker.ImportImageOptions{
-		Repository: data["Repository"],
-		Source:     data["Path"],
-		Tag:        data["Tag"],
-	}
 
 	i.form.Close(g, v)
 
 	i.AddTask(fmt.Sprintf("Import image from %s", data["Path"]), func() error {
-		i.Logger.Info("import image start")
-		defer i.Logger.Info("import image finished")
+		common.Logger.Info("import image start")
+		defer common.Logger.Info("import image end")
 
-		if err := i.Docker.ImportImageWithOptions(options); err != nil {
-			i.Logger.Error(err)
+		if err := i.Docker.ImportImage(data["Repository"], data["Tag"], data["Path"]); err != nil {
+			common.Logger.Error(err)
 			return err
 		}
 
@@ -550,6 +559,7 @@ func (i *ImageList) ImportImage(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// LoadImagePanel disply load image form.
 func (i *ImageList) LoadImagePanel(g *gocui.Gui, v *gocui.View) error {
 	maxX, maxY := i.Size()
 	x := maxX / 8
@@ -580,6 +590,7 @@ func (i *ImageList) LoadImagePanel(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// LoadImage load the specified file path.
 func (i *ImageList) LoadImage(g *gocui.Gui, v *gocui.View) error {
 
 	if !i.form.Validate() {
@@ -591,11 +602,11 @@ func (i *ImageList) LoadImage(g *gocui.Gui, v *gocui.View) error {
 	i.form.Close(g, v)
 
 	i.AddTask(fmt.Sprintf("Load image from %s", path), func() error {
-		i.Logger.Info("load image start")
-		defer i.Logger.Info("load image finished")
+		common.Logger.Info("load image start")
+		defer common.Logger.Info("load image end")
 
-		if err := i.Docker.LoadImageWithPath(path); err != nil {
-			i.Logger.Error(err)
+		if err := i.Docker.LoadImage(path); err != nil {
+			common.Logger.Error(err)
 			return err
 		}
 
@@ -605,6 +616,7 @@ func (i *ImageList) LoadImage(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// SearchImagePanel display the search form.
 func (i *ImageList) SearchImagePanel(g *gocui.Gui, v *gocui.View) error {
 	i.name = g.CurrentView().Name()
 
@@ -618,11 +630,21 @@ func (i *ImageList) SearchImagePanel(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// GetImageList return images info
 func (i *ImageList) GetImageList(v *gocui.View) {
 	v.Clear()
 	i.Images = make([]*Image, 0)
 
-	for _, image := range i.Docker.Images(docker.ListImagesOptions{}) {
+	images, err := i.Docker.Images(types.ImageListOptions{
+		All: true,
+	})
+
+	if err != nil {
+		common.Logger.Error(err)
+		return
+	}
+
+	for _, image := range images {
 		for _, repoTag := range image.RepoTags {
 			repo, tag := common.ParseRepoTag(repoTag)
 
@@ -647,15 +669,16 @@ func (i *ImageList) GetImageList(v *gocui.View) {
 
 			i.Images = append(i.Images, image)
 
-			common.OutputFormatedLine(v, image)
+			common.OutputFormattedLine(v, image)
 		}
 	}
 }
 
+// GetImageName return the specified image name
 func (i *ImageList) GetImageName() (string, error) {
 	image, err := i.selected()
 	if err != nil {
-		i.Logger.Error(err)
+		common.Logger.Error(err)
 		return "", err
 	}
 
@@ -669,22 +692,23 @@ func (i *ImageList) GetImageName() (string, error) {
 	return name, nil
 }
 
+// RemoveImage remove the specified image
 func (i *ImageList) RemoveImage(g *gocui.Gui, v *gocui.View) error {
 	name, err := i.GetImageName()
 	if err != nil {
 		i.ErrMessage(err.Error(), i.name)
-		i.Logger.Error(err)
+		common.Logger.Error(err)
 		return nil
 	}
 
 	i.ConfirmMessage("Are you sure you want to remove this image?", i.name, func() error {
 		i.AddTask(fmt.Sprintf("Remove image %s", name), func() error {
-			i.Logger.Info("remove image start")
-			defer i.Logger.Info("remove image finished")
+			common.Logger.Info("remove image start")
+			defer common.Logger.Info("remove image end")
 
-			if err := i.Docker.RemoveImageWithName(name); err != nil {
+			if err := i.Docker.RemoveImage(name); err != nil {
 				i.ErrMessage(err.Error(), i.name)
-				i.Logger.Error(err)
+				common.Logger.Error(err)
 				return err
 			}
 
@@ -697,6 +721,7 @@ func (i *ImageList) RemoveImage(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// RemoveDanglingImages remove then dangling images.
 func (i *ImageList) RemoveDanglingImages(g *gocui.Gui, v *gocui.View) error {
 	if len(i.Images) == 0 {
 		i.ErrMessage(common.ErrNoImage.Error(), i.name)
@@ -705,12 +730,12 @@ func (i *ImageList) RemoveDanglingImages(g *gocui.Gui, v *gocui.View) error {
 
 	i.ConfirmMessage("Are you sure you want to remove unused images?", i.name, func() error {
 		i.AddTask("Remove unused image", func() error {
-			i.Logger.Info("remove unused image start")
-			defer i.Logger.Info("remove unused image finished")
+			common.Logger.Info("remove unused image start")
+			defer common.Logger.Info("remove unused image end")
 
 			if err := i.Docker.RemoveDanglingImages(); err != nil {
 				i.ErrMessage(err.Error(), i.name)
-				i.Logger.Error(err)
+				common.Logger.Error(err)
 				return err
 			}
 			return i.Refresh(g, v)
@@ -722,6 +747,7 @@ func (i *ImageList) RemoveDanglingImages(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// Filter display filtering form.
 func (i *ImageList) Filter(g *gocui.Gui, lv *gocui.View) error {
 	isReset := false
 	closePanel := func(g *gocui.Gui, v *gocui.View) error {
@@ -736,7 +762,7 @@ func (i *ImageList) Filter(g *gocui.Gui, lv *gocui.View) error {
 		}
 
 		if err := g.DeleteView(v.Name()); err != nil {
-			i.Logger.Error(err)
+			common.Logger.Error(err)
 			return nil
 		}
 
@@ -751,7 +777,7 @@ func (i *ImageList) Filter(g *gocui.Gui, lv *gocui.View) error {
 	}
 
 	if err := i.NewFilterPanel(i, reset, closePanel); err != nil {
-		i.Logger.Error(err)
+		common.Logger.Error(err)
 		return nil
 	}
 

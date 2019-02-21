@@ -9,6 +9,7 @@ import (
 	"github.com/skanehira/docui/common"
 )
 
+// VolumeList volume list panel.
 type VolumeList struct {
 	*Gui
 	Position
@@ -17,8 +18,10 @@ type VolumeList struct {
 	Data    map[string]interface{}
 	filter  string
 	form    *Form
+	stop    chan int
 }
 
+// Volume volume info
 type Volume struct {
 	Name       string `tag:"NAME" len:"min:0.1 max:0.2"`
 	MountPoint string `tag:"MOUNTPOINT" len:"min:0.1 max:0.4"`
@@ -26,21 +29,26 @@ type Volume struct {
 	Created    string `tag:"CREATED" len:"min:0.1 max:0.2"`
 }
 
-var location = time.FixedZone("Asia/Tokyo", 9*60*60)
+// replace date format
+var replacer = strings.NewReplacer("T", " ", "Z", "")
 
+// NewVolumeList create new volume list panel.
 func NewVolumeList(gui *Gui, name string, x, y, w, h int) *VolumeList {
 	return &VolumeList{
 		Gui:      gui,
 		name:     name,
 		Position: Position{x, y, w, h},
 		Data:     make(map[string]interface{}),
+		stop:     make(chan int, 1),
 	}
 }
 
+// Name return panel name.
 func (vl *VolumeList) Name() string {
 	return vl.name
 }
 
+// Edit filtering volume list.
 func (vl *VolumeList) Edit(v *gocui.View, key gocui.Key, ch rune, mod gocui.Modifier) {
 	switch {
 	case ch != 0 && mod == 0:
@@ -64,11 +72,12 @@ func (vl *VolumeList) Edit(v *gocui.View, key gocui.Key, ch rune, mod gocui.Modi
 	}
 }
 
+// SetView set up volume list panel.
 func (vl *VolumeList) SetView(g *gocui.Gui) error {
 	// set header panel
-	if v, err := g.SetView(VolumeListHeaderPanel, vl.x, vl.y, vl.w, vl.h); err != nil {
+	if v, err := common.SetViewWithValidPanelSize(g, VolumeListHeaderPanel, vl.x, vl.y, vl.w, vl.h); err != nil {
 		if err != gocui.ErrUnknownView {
-			vl.Logger.Error(err)
+			common.Logger.Error(err)
 			return err
 		}
 
@@ -76,14 +85,14 @@ func (vl *VolumeList) SetView(g *gocui.Gui) error {
 		v.Frame = true
 		v.Title = v.Name()
 		v.FgColor = gocui.AttrBold | gocui.ColorWhite
-		common.OutputFormatedHeader(v, &Volume{})
+		common.OutputFormattedHeader(v, &Volume{})
 	}
 
 	// set scroll panel
-	v, err := g.SetView(vl.name, vl.x, vl.y+1, vl.w, vl.h)
+	v, err := common.SetViewWithValidPanelSize(g, vl.name, vl.x, vl.y+1, vl.w, vl.h)
 	if err != nil {
 		if err != gocui.ErrUnknownView {
-			vl.Logger.Error(err)
+			common.Logger.Error(err)
 			return err
 		}
 
@@ -94,23 +103,45 @@ func (vl *VolumeList) SetView(g *gocui.Gui) error {
 		v.SelFgColor = gocui.ColorBlack | gocui.AttrBold
 		v.SetOrigin(0, 0)
 		v.SetCursor(0, 0)
+
+		vl.GetVolumeList(v)
 	}
 
 	vl.SetKeyBinding()
 
-	//monitoring volume interval 5s
-	go func() {
-		for {
-			vl.Update(func(g *gocui.Gui) error {
-				vl.Refresh(g, v)
-				return nil
-			})
-			time.Sleep(5 * time.Second)
-		}
-	}()
+	// monitoring volume status.
+	go vl.Monitoring(vl.stop, vl.Gui.Gui, v)
 	return nil
 }
 
+// Monitoring monitoring image list.
+func (vl *VolumeList) Monitoring(stop chan int, g *gocui.Gui, v *gocui.View) {
+	common.Logger.Info("monitoring volume list start")
+	ticker := time.NewTicker(5 * time.Second)
+
+LOOP:
+	for {
+		select {
+		case <-ticker.C:
+			vl.Update(func(g *gocui.Gui) error {
+				return vl.Refresh(g, v)
+			})
+		case <-stop:
+			ticker.Stop()
+			break LOOP
+		}
+	}
+	common.Logger.Info("monitoring volume list stop")
+}
+
+// CloseView close panel
+func (vl *VolumeList) CloseView() {
+	// stop monitoring
+	vl.stop <- 0
+	close(vl.stop)
+}
+
+// SetKeyBinding set key bind to this panel.
 func (vl *VolumeList) SetKeyBinding() {
 	vl.SetKeyBindingToPanel(vl.name)
 
@@ -137,6 +168,7 @@ func (vl *VolumeList) SetKeyBinding() {
 	}
 }
 
+// selected return selected volume.
 func (vl *VolumeList) selected() (*Volume, error) {
 	v, _ := vl.View(vl.name)
 	_, cy := v.Cursor()
@@ -151,11 +183,12 @@ func (vl *VolumeList) selected() (*Volume, error) {
 	return vl.Volumes[cy+oy], nil
 }
 
+// Refresh update volume info.
 func (vl *VolumeList) Refresh(g *gocui.Gui, v *gocui.View) error {
 	vl.Update(func(g *gocui.Gui) error {
 		v, err := vl.View(vl.name)
 		if err != nil {
-			vl.Logger.Error(err)
+			common.Logger.Error(err)
 			return nil
 		}
 
@@ -167,14 +200,22 @@ func (vl *VolumeList) Refresh(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// GetVolumeList return volumes
 func (vl *VolumeList) GetVolumeList(v *gocui.View) {
 	v.Clear()
 	vl.Volumes = make([]*Volume, 0)
 
-	var keys []string
+	volumes, err := vl.Docker.Volumes()
+
+	if err != nil {
+		common.Logger.Error(err)
+		return
+	}
+
+	keys := make([]string, 0, len(volumes))
 	tmpMap := make(map[string]*Volume)
 
-	for _, volume := range vl.Docker.Volumes() {
+	for _, volume := range volumes {
 		if vl.filter != "" {
 			if strings.Index(strings.ToLower(volume.Name), strings.ToLower(vl.filter)) == -1 {
 				continue
@@ -185,19 +226,19 @@ func (vl *VolumeList) GetVolumeList(v *gocui.View) {
 			Name:       volume.Name,
 			MountPoint: volume.Mountpoint,
 			Driver:     volume.Driver,
-			Created:    volume.CreatedAt.In(location).Format("2006/01/02 15:04:05"),
+			Created:    replacer.Replace(volume.CreatedAt),
 		}
 
 		keys = append(keys, volume.Name)
 	}
 
 	for _, key := range common.SortKeys(keys) {
-		common.OutputFormatedLine(v, tmpMap[key])
+		common.OutputFormattedLine(v, tmpMap[key])
 		vl.Volumes = append(vl.Volumes, tmpMap[key])
 	}
-
 }
 
+// CreateVolumePanel display create volume form.
 func (vl *VolumeList) CreateVolumePanel(g *gocui.Gui, v *gocui.View) error {
 	maxX, maxY := vl.Size()
 
@@ -231,19 +272,18 @@ func (vl *VolumeList) CreateVolumePanel(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// CreateVolume create volume
 func (vl *VolumeList) CreateVolume(g *gocui.Gui, v *gocui.View) error {
 	data := vl.form.GetFieldTexts()
-
-	options := vl.Docker.NewCreateVolumeOptions(data)
 
 	vl.form.Close(g, v)
 
 	vl.AddTask(fmt.Sprintf("Volume create %s", data["Name"]), func() error {
-		vl.Logger.Info("create volume start")
-		defer vl.Logger.Info("create volume finished")
+		common.Logger.Info("create volume start")
+		defer common.Logger.Info("create volume end")
 
-		if err := vl.Docker.CreateVolumeWithOptions(options); err != nil {
-			vl.Logger.Error(err)
+		if err := vl.Docker.CreateVolume(vl.Docker.NewCreateVolumeOptions(data)); err != nil {
+			common.Logger.Error(err)
 			return nil
 		}
 
@@ -253,29 +293,30 @@ func (vl *VolumeList) CreateVolume(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// RemoveVolume remove the specified volume
 func (vl *VolumeList) RemoveVolume(g *gocui.Gui, v *gocui.View) error {
 	selected, err := vl.selected()
 	if err != nil {
 		vl.ErrMessage(err.Error(), vl.name)
-		vl.Logger.Error(err)
+		common.Logger.Error(err)
 		return nil
 	}
 
 	_, err = vl.Docker.InspectVolume(selected.Name)
 	if err != nil {
 		vl.ErrMessage(err.Error(), vl.name)
-		vl.Logger.Error(err)
+		common.Logger.Error(err)
 		return nil
 	}
 
 	vl.ConfirmMessage("Are you sure you want to remove this volume?", vl.name, func() error {
 		vl.AddTask(fmt.Sprintf("Remove container %s", selected.Name), func() error {
-			vl.Logger.Info("remove volume start")
-			defer vl.Logger.Info("remove volume finished")
+			common.Logger.Info("remove volume start")
+			defer common.Logger.Info("remove volume end")
 
-			if err := vl.Docker.RemoveVolumeWithName(selected.Name); err != nil {
+			if err := vl.Docker.RemoveVolume(selected.Name); err != nil {
 				vl.ErrMessage(err.Error(), vl.name)
-				vl.Logger.Error(err)
+				common.Logger.Error(err)
 				return err
 			}
 
@@ -287,21 +328,22 @@ func (vl *VolumeList) RemoveVolume(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// PruneVolumes remove unused volumes.
 func (vl *VolumeList) PruneVolumes(g *gocui.Gui, v *gocui.View) error {
 	if len(vl.Volumes) == 0 {
 		vl.ErrMessage(common.ErrNoVolume.Error(), vl.name)
-		vl.Logger.Error(common.ErrNoVolume.Error(), vl.name)
+		common.Logger.Error(common.ErrNoVolume)
 		return nil
 	}
 
 	vl.ConfirmMessage("Are you sure you want to remove unused volumes?", vl.name, func() error {
 		vl.AddTask("Remove unused volume", func() error {
-			vl.Logger.Info("remove unused volume start")
-			defer vl.Logger.Info("remove unused volume finished")
+			common.Logger.Info("remove unused volume start")
+			defer common.Logger.Info("remove unused volume end")
 
 			if err := vl.Docker.PruneVolumes(); err != nil {
 				vl.ErrMessage(err.Error(), vl.name)
-				vl.Logger.Error(err)
+				common.Logger.Error(err)
 				return err
 			}
 
@@ -312,21 +354,22 @@ func (vl *VolumeList) PruneVolumes(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// DetailVolume display detail the specified volume.
 func (vl *VolumeList) DetailVolume(g *gocui.Gui, v *gocui.View) error {
-	vl.Logger.Info("inspect volume start")
-	defer vl.Logger.Info("inspect volume finished")
+	common.Logger.Info("inspect volume start")
+	defer common.Logger.Info("inspect volume end")
 
 	selected, err := vl.selected()
 	if err != nil {
 		vl.ErrMessage(err.Error(), vl.name)
-		vl.Logger.Error(err)
+		common.Logger.Error(err)
 		return nil
 	}
 
 	volume, err := vl.Docker.InspectVolume(selected.Name)
 	if err != nil {
 		vl.ErrMessage(err.Error(), vl.name)
-		vl.Logger.Error(err)
+		common.Logger.Error(err)
 		return nil
 	}
 
@@ -334,7 +377,7 @@ func (vl *VolumeList) DetailVolume(g *gocui.Gui, v *gocui.View) error {
 
 	v, err = g.View(DetailPanel)
 	if err != nil {
-		vl.Logger.Error(err)
+		common.Logger.Error(err)
 		return nil
 	}
 
@@ -347,6 +390,7 @@ func (vl *VolumeList) DetailVolume(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// Filter filtering volume
 func (vl *VolumeList) Filter(g *gocui.Gui, lv *gocui.View) error {
 	isReset := false
 	closePanel := func(g *gocui.Gui, v *gocui.View) error {
@@ -361,7 +405,7 @@ func (vl *VolumeList) Filter(g *gocui.Gui, lv *gocui.View) error {
 		}
 
 		if err := g.DeleteView(v.Name()); err != nil {
-			vl.Logger.Error(err)
+			common.Logger.Error(err)
 			return nil
 		}
 
@@ -376,7 +420,7 @@ func (vl *VolumeList) Filter(g *gocui.Gui, lv *gocui.View) error {
 	}
 
 	if err := vl.NewFilterPanel(vl, reset, closePanel); err != nil {
-		vl.Logger.Error(err)
+		common.Logger.Error(err)
 		return nil
 	}
 

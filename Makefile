@@ -18,19 +18,13 @@ build: clean
 install: build
 	cp -f $(BINARY_NAME) $(GOBIN)/
 
-# build realese binary
-realease: clean
+# build release binary
+release: clean
 	GOOS=darwin GOARCH=amd64 $(GOBUILD) && zip MacOS.zip ./docui && rm -rf ./docui
 	GOOS=linux GOARCH=amd64 $(GOBUILD) && zip Linux.zip ./docui && rm -rf ./docui
 
-# Cross compilation
-build-linux:
-	GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(DOCKER_BINARY_NAME)
-
-# Docker
-docker-build: build-linux
+docker-build:
 	docker build -t skanehira/docui .
-	rm $(DOCKER_BINARY_NAME)
 
 docker-push:
 	docker push skanehira/docui

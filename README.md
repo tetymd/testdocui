@@ -1,7 +1,13 @@
 # docui - TUI Client for Docker Written in Go
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/skanehira/docui?)](https://goreportcard.com/report/github.com/skanehira/docui)
+[![CircleCI](https://img.shields.io/circleci/project/github/skanehira/docui.svg?style=flat-square)](https://goreportcard.com/report/github.com/skanehira/docui)
+[![CircleCI](https://img.shields.io/github/release/skanehira/docui.svg?style=flat-square)](https://github.com/skanehira/docui/releases)
+![GitHub All Releases](https://img.shields.io/github/downloads/skanehira/docui/total.svg?style=flat)
+![GitHub commits](https://img.shields.io/github/commits-since/skanehira/docui/1.0.0.svg?style=flat-square)
+
 ## About docui
-docui is TUI Tool for Docker Client.  
+docui is TUI Client for Docker.  
 docui can do as follows:
 
 - image
@@ -26,12 +32,19 @@ docui can do as follows:
 
 [![asciicast](https://asciinema.org/a/223035.svg)](https://asciinema.org/a/223035)
 
+## Support OS
+- Mac
+- Linux
+
 ## Required Tools
 - Go Ver.1.11.4~
 - Docker Engine Ver.18.06.1~
 - Git
 
 ## Installation
+
+### From Source
+
 If you have not installed go and set GOPATH/GOBIN,  
 you must install and set env before install docui.
 
@@ -57,6 +70,19 @@ Make sure your PATH includes the $GOPATH/bin directory so your commands can be e
 export PATH=$PATH:$GOPATH/bin
 ```
 
+### Homebrew
+
+```sh
+$ brew tap skanehira/docui
+$ brew install docui
+```
+
+### Snapd
+
+```sh
+$ snap install docui --classic
+```
+
 ## Update
 
 Use git pull:
@@ -67,25 +93,23 @@ $ GO111MODULE=on go install
 ```
 
 ## Log file
-```
+```sh
 ~/docui.log
 ```
 
 ## Use on Docker
 ```
 $ docker run --rm -itv /var/run/docker.sock:/var/run/docker.sock skanehira/docui
-$ docui
 ```
 
 ## Build Docker Image
-```
-$ cd build
-$ bash build.sh
+```sh
+$ make docker-build
 ```
 
 ## Keybindings
 | panel            | operation              | key                             |
-|------------------|------------------------|---------------------------------|
+| ---------------- | ---------------------- | ------------------------------- |
 | all              | change panel           | <kbd>Tab</kbd>                  |
 | all              | quit                   | <kbd>Ctrl</kbd> + <kbd>q</kbd>  |
 | all              | quit                   | <kbd>q</kbd>                    |
