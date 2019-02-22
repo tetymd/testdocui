@@ -11,18 +11,17 @@ confinement: classic
 build-packages:
   - git
   - gcc
-
-build-snaps:
-  - go
+  - make
 
 parts:
   docui:
     source: .
-    plugin: make
-    #    go-importpath: github.com/tetymd/testdocui
-    #build-snaps:
-    #  - go/latest/stable
-    #override-build: |
+    plugin: go
+      go-importpath: github.com/tetymd/testdocui
+    build-snaps:
+      - go/latest/stable
+    override-build: |
+      make build
     #  go build -o /build/test-snap-tetymd/parts/testdocui/go/bin/testdocui .
 
 apps:
