@@ -21,7 +21,7 @@ parts:
     build-snaps:
       - go/latest/stable
     override-build: |
-      make build
+      make install
 
 apps:
   test-snap-tetymd:
