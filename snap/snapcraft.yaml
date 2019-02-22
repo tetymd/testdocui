@@ -20,7 +20,7 @@ parts:
     build-snaps:
       - go/latest/stable
     override-build: |
-      go build
+      go build -o /build/test-snap-tetymd/parts/docui/go/bin/testdocui .
 
 apps:
   test-snap-tetymd:
