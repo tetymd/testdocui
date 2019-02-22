@@ -27,3 +27,5 @@ parts:
 apps:
   test-snap-tetymd:
     command: docui
+
+
