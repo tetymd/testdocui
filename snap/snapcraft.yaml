@@ -16,11 +16,10 @@ parts:
   docui:
     source: .
     plugin: go
-    go-importpath: github.com/skanehira/docui
     build-snaps:
       - go/1.11/stable
     override-build: |
-      GO111MODULE=on go build -o $SANP/bin/docui .
+      go build -o $SANP/bin/docui .
 
 apps:
   test-snap-tetymd:
