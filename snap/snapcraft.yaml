@@ -16,6 +16,7 @@ parts:
   docui:
     source: .
     plugin: go
+    go-importpath: github.com/tetymd/testdocui
     build-snaps:
       - go/1.11/stable
     override-build: |
