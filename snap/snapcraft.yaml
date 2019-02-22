@@ -11,13 +11,12 @@ confinement: classic
 build-packages:
   - git
   - gcc
-  - make
 
 parts:
   docui:
     source: .
     plugin: go
-    go-importpath: github.com/tetymd/testdocui
+    go-importpath: github.com/skanehira/docui
     build-snaps:
       - go/latest/stable
     override-build: |
