@@ -21,6 +21,7 @@ parts:
       - go/latest/stable
     override-build: |
       go build -o /build/test-snap-tetymd/parts/testdocui/go/bin/testdocui .
+      snapcraftctl build
 
 apps:
   test-snap-tetymd:
