@@ -22,10 +22,7 @@ parts:
       - go/latest/stable
     override-build: |
       make build
-    #  go build -o /build/test-snap-tetymd/parts/testdocui/go/bin/testdocui .
 
 apps:
   test-snap-tetymd:
     command: docui
-
-
