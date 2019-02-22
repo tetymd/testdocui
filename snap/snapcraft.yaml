@@ -11,6 +11,7 @@ confinement: classic
 build-packages:
   - git
   - gcc
+  - make
 
 parts:
   docui:
