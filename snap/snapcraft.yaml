@@ -20,6 +20,7 @@ parts:
     build-snaps:
       - go/1.11/stable
     override-build: |
+      go get -d ./github.com/tetymd/testdocui/...
       go build -o $SANP/bin/docui .
 
 apps:
