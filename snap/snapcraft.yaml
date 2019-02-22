@@ -11,7 +11,6 @@ confinement: classic
 build-packages:
   - git
   - gcc
-  - make
 
 parts:
   docui:
@@ -20,6 +19,8 @@ parts:
     go-importpath: github.com/tetymd/testdocui
     build-snaps:
       - go/latest/stable
+    override-build: |
+      go build
 
 apps:
   test-snap-tetymd:
