@@ -18,7 +18,7 @@ parts:
     plugin: go
     go-importpath: github.com/skanehira/docui
     build-snaps:
-      - go/latest/stable
+      - go/1.11
     override-build: |
       go build -o $SANP/bin/docui .
 
