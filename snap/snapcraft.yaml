@@ -13,16 +13,15 @@ build-packages:
   - gcc
 
 parts:
-  testdocui:
+  docui:
     source: .
-    plugin: go
-    go-importpath: github.com/tetymd/testdocui
-    build-snaps:
-      - go/latest/stable
-    override-build: |
-      go build -o /build/test-snap-tetymd/parts/testdocui/go/bin/testdocui .
-      ls /build/test-snap-tetymd/parts/testdocui/go/bin
+    plugin: make
+    #    go-importpath: github.com/tetymd/testdocui
+    #build-snaps:
+    #  - go/latest/stable
+    #override-build: |
+    #  go build -o /build/test-snap-tetymd/parts/testdocui/go/bin/testdocui .
 
 apps:
   test-snap-tetymd:
-    command: testdocui
+    command: docui
