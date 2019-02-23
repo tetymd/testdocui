@@ -1,0 +1,5 @@
+!GlobalState
+assets:
+  build-packages: []
+  build-snaps:
+  - go=3129
