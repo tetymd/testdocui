@@ -15,12 +15,11 @@ parts:
     go-importpath: github.com/tetymd/testdocui
     source-type: git
     build-packages:
-      - git
       - gcc
     build-snaps:
       - go/1.11/stable
-    override-build: |
-      go build -o $SANP/bin/docui .
+    # override-build: |
+      # go build -o $SANP/bin/docui .
 
 apps:
   test-snap-tetymd:
