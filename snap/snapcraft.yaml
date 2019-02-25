@@ -5,15 +5,16 @@ version: latest
 summary:  docui is TUI Client for Docker.
 description: |
   docui is TUI Client for Docker.
+
 grade: stable
 confinement: classic
 
 parts:
   testdocui:
-    source: .
-    source-type: git
     plugin: go
     go-importpath: github.com/tetymd/testdocui
+    source: .
+    source-type: git
     build-packages:
       - gcc
     build-snaps:
