@@ -10,7 +10,7 @@ confinement: classic
 
 parts:
   docui:
-    source: https://github.com/tetymd/testdocui.git
+    source: .
     plugin: go
     go-importpath: github.com/tetymd/testdocui
     source-type: git
@@ -18,7 +18,8 @@ parts:
       - gcc
     build-snaps:
       - go/1.11/stable
-    # override-build: |
+    override-build: |
+      snapcraftctl build
       # go build -o $SANP/bin/docui .
 
 apps:
