@@ -10,7 +10,7 @@ confinement: classic
 
 parts:
   docui:
-    source: .
+    source: github.com/tetymd/testdocui
     plugin: go
     go-importpath: github.com/tetymd/testdocui
     source-type: git
