@@ -11,18 +11,16 @@ confinement: classic
 parts:
   testdocui:
     source: .
+    source-type: git
     plugin: go
     go-importpath: github.com/tetymd/testdocui
-    source-type: git
     build-packages:
       - gcc
     build-snaps:
       - go/1.11/stable
     override-build: |
-      go build -o $SANP/bin/docui .
+      go build -o $SANP/bin/testdocui .
 
 apps:
   test-snap-tetymd:
     command: testdocui
-
-
