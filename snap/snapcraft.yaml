@@ -10,18 +10,18 @@ grade: stable
 confinement: classic
 
 parts:
-  testdocui:
+  docui:
     plugin: go
-    go-importpath: github.com/tetymd/testdocui
+    go-importpath: github.com/skanehira/docui
     source: .
     source-type: git
     build-packages:
       - gcc
     build-snaps:
-      - go/1.11/stable
+      - go/latest/stable
     override-build: |
-      go build -o $SANP/bin/testdocui .
+      go build -o $SANP/bin/docui .
 
 apps:
   test-snap-tetymd:
-    command: testdocui
+    command: docui
