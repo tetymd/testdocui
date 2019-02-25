@@ -8,18 +8,18 @@ description: |
 grade: stable
 confinement: classic
 
-build-packages:
-  - git
-  - gcc
-
 parts:
   docui:
     source: .
+    source-type: git
     plugin: go
     go-importpath: github.com/skanehira/docui
+    build-packages:
+      - gcc
     build-snaps:
       - go/latest/stable
-
+    override-build: |
+      go build -o $SANP/bin/docui .
 apps:
   docui:
     command: docui
