@@ -7,7 +7,7 @@ description: |
   docui is TUI Client for Docker.
 
 grade: stable
-confinement: classic
+confinement: devmode
 
 parts:
   docui:
