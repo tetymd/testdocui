@@ -19,9 +19,8 @@ parts:
     build-snaps:
       - go/latest/stable
     override-build: |
-      mkdir bin
-      go build -o bin/docui .
+      go build -o $SNAPCRAFT_PART_INSTALL/bin/docui .
 
 apps:
   test-snap-tetymd:
-    command: bin/docui
+    command: docui
