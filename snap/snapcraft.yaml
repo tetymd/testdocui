@@ -19,6 +19,7 @@ parts:
     build-snaps:
       - go/latest/stable
     override-build: |
+      mkdir bin
       go build -o bin/docui .
 
 apps:
