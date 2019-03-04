@@ -7,7 +7,7 @@ description: |
   docui is TUI Client for Docker.
 
 grade: stable
-confinement: devmode
+confinement: classic
 
 parts:
   docui:
@@ -19,8 +19,8 @@ parts:
     build-snaps:
       - go/latest/stable
     override-build: |
-      go build -o $SANP/bin/docui .
+      go build -o bin/docui .
 
 apps:
   test-snap-tetymd:
-    command: docui
+    command: bin/docui
